@@ -11,7 +11,7 @@ The project regards the discovery of disease subtypes using a multi-omics datase
 7. [GROUP] Integrate the dataset using another data fusion method called NEMO [4] to obtain an integrated similarity matrix. NEMO implementation is available on github ([https://github.com/Shamir-Lab/NEMO](https://github.com/Shamir-Lab/NEMO));
 8. Perform disease subtype discovery (number of clusters equal to the number of disease subtypes found by iCluster) using PAM algorithm [5] on the following similarity matrices:
 	1. Similarity matrices obtained from single data sources (i.e. miRNA, mRNA, proteins) using the usual scaled exponential euclidean distance. Thus, you should obtain three different similarity matrices. To compute the corresponding distance matrix use this code: dist <- 1 - NetPreProc::Prob.norm(W). Prob.norm() function is in the NetPreProc CRAN package ([https://cran.r-project.org/web/packages/NetPreProc/index.html](https://cran.r-project.org/web/packages/NetPreProc/index.html)). The idea is to normalize the similarity matrix before computing the corresponding distance;
-	2. Integrated matrix obtained using the average among matrices. Use dist <- 1 - NetPre- Proc::Prob.norm(W) to compute the distance matrix;
+	2. Integrated matrix obtained using the average among matrices. Use dist <- 1 - NetPreProc::Prob.norm(W) to compute the distance matrix;
 	3. Integrated matrix obtained using Similarity Network Fusion;
 	4. [GROUP] Integrated matrix obtained using NEMO. Use dist <- 1 - NetPreProc::Prob.norm(W) to compute the distance matrix;
 9. [GROUP] NEMO provides the possibility of performing clustering using another approach called Spectral Clustering [6]. Use the function *nemo.clustering()* to test this approach.
