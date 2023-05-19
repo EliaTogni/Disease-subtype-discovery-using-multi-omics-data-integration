@@ -29,9 +29,9 @@ The report must contain the following sections:
 
 ## References
 
-[1]: A. Abeshouse *et al.*, “The molecular taxonomy of primary prostate cancer,” *Cell*, vol. 163, no. 4, pp. 1011–1025, 2015.
-[2]: R. Shen, A. B. Olshen, and M. Ladanyi, “Integrative clustering of multiple genomic data types using a joint latent variable model with application to breast and lung cancer subtype analysis,” *Bioinformatics*, vol. 25, no. 22, pp. 2906–2912, 2009.
-[3]: B. Wang *et al.*, “Similarity network fusion for aggregating data types on a genomic scale,” *Nature methods*, vol. 11, no. 3, pp. 333–337, 2014.
-[4]: N. Rappoport and R. Shamir, “NEMO: Cancer subtyping by integration of partial multi-omic data,” *Bioinformatics*, vol. 35, no. 18, pp. 3348–3356, 2019.
-[5]: “Partitioning around medoids (program PAM),” in *Finding groups in data*, John Wiley & Sons, Ltd, 1990, pp. 68–125. doi: [https://doi.org/10.1002/9780470316801.ch2](https://doi.org/10.1002/9780470316801.ch2).
+[1]: A. Abeshouse *et al.*, “The molecular taxonomy of primary prostate cancer,” *Cell*, vol. 163, no. 4, pp. 1011–1025, 2015.<br />
+[2]: R. Shen, A. B. Olshen, and M. Ladanyi, “Integrative clustering of multiple genomic data types using a joint latent variable model with application to breast and lung cancer subtype analysis,” *Bioinformatics*, vol. 25, no. 22, pp. 2906–2912, 2009.<br />
+[3]: B. Wang *et al.*, “Similarity network fusion for aggregating data types on a genomic scale,” *Nature methods*, vol. 11, no. 3, pp. 333–337, 2014.<br />
+[4]: N. Rappoport and R. Shamir, “NEMO: Cancer subtyping by integration of partial multi-omic data,” *Bioinformatics*, vol. 35, no. 18, pp. 3348–3356, 2019.<br />
+[5]: “Partitioning around medoids (program PAM),” in *Finding groups in data*, John Wiley & Sons, Ltd, 1990, pp. 68–125. doi: [https://doi.org/10.1002/9780470316801.ch2](https://doi.org/10.1002/9780470316801.ch2).<br />
 [6]: U. Von Luxburg, “A tutorial on spectral clustering,” *Statistics and computing*, vol. 17, pp. 395–416, 2007.
