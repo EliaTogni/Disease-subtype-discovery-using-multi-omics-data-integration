@@ -1,0 +1,380 @@
+---
+title: "Bioinformatics project: Disease subtype discovery (2022-2023)"
+author: "Elia Togni"
+date: "September 2023"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    number_sections: yes
+    toc_float: yes
+    theme: cerulean
+    fig_caption: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+# Install and load packages
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(
+  c("curatedTCGAData",
+    "TCGAutils",
+    "TCGAbiolinks",
+    "NetPreProc",
+    "remotes",
+    "SNFtool",
+    "caret",
+    "cluster",
+    "mclustcomp",
+    "factoextra"),
+  ask = FALSE
+);
+```
+
+```{r}
+library("curatedTCGAData");
+library("TCGAbiolinks");
+library("TCGAutils");
+library("NetPreProc");
+library("SNFtool");
+library("caret");
+library("cluster"); #pam
+library("mclustcomp");
+library("factoextra");
+```
+
+# Multi-omics data (1)
+# Download prostate cancer multi-omics dataset.
+# Note that RPPA stands for Reverse-phase protein array and it is the technology used to obtain proteomic data.
+
+```{r}
+assays <- c("miRNASeqGene", "RNASeq2Gene", "RPPAArray");
+mo <- curatedTCGAData(diseaseCode = "PRAD", assays = assays, dry.run = FALSE, version = "2.0.1", verbose = FALSE);
+```
+
+# This subset does not change the content of the variable "mo" if using the version 4.2.0 of R.
+```{r}
+mo <- mo[, , paste0("PRAD", "_", assays, "-20160128")];
+```
+
+# This command print a summary of the MultiAssayExperiemnt object.
+```{r}
+mo;
+```
+
+# Filtering (2)
+# We extract the samples knowing that the type of tumor is indicated in the barcode. In TCGA “Primary Solid Tumors” are identified by the code “01” in the sample part of the barcode.
+# Consider only primary solid tumors because primary tumors originate in a specific organ or tissue and are generally more consistent in terms of location, size, and characteristics compared # to metastatic tumors (secondary tumors that spread from the primary site). Focusing on primary tumors helps maintain statistical validity by comparing similar types of tumors, reducing
+# variability and confounding factors that may arise from studying different metastatic sites.
+
+```{r warning=FALSE}
+# Consider only primary solid tumors:
+primary <- TCGAutils::TCGAsampleSelect(colnames(mo), c("01"));
+mo <- mo[, primary, ];
+```
+
+# The execution of the precedent cell raises a warnin due to the fact that the barcode associated with
+# the RPPAArray is composed by 27 characters while the others are composed by 28 characters.
+
+# Check for replicates (anyReplicated() checks the so called biological or primary unit in the sampleMap of the
+# MultiAssayExperiment object, that corresponds to the first 12 characters of the barcodes for TCGA data). In fact,
+# If two samples have the same 12 characters in their barcodes, then they come from the same patient and can be
+# identified as technical replicated (since we already filtered for the same sample type). The outcome ("FALSE")
+# indicates that there were no replicates.
+
+```{r}
+# Check for replicates
+check_rep <- anyReplicated(mo);
+print(check_rep);
+```
+
+```{r}
+# The information regarding if the sample is FFPE is stored in the clinical data
+no_ffpe <- which(as.data.frame(colData(mo))$patient.samples.sample.is_ffpe == "no");
+mo <- mo[, no_ffpe, ];
+
+# intersectColumns() is a wrapper for complete.cases to return a MultiAssayExperiment with only those biological
+# units that have measurements across all experiments. We will obtain samples having all the considered omics (1044 rows and 3 columns).
+complete <- intersectColumns(mo);
+
+# Extract assays in list of matrices. To access an assay it is possible to use complete$assaysname
+complete <- assays(complete);
+
+# Obtain matrices samples x features:
+complete <- lapply(complete, FUN = t)
+
+```
+
+```{r}
+# Remove features having NAs (present only in proteomics data).
+# In details, "is.na(complete[[i]])" checks for missing values (NA) in the third matrix.
+# "colSums(is.na(complete[[i]]))" calculates the column-wise sums of missing values. It returns a numeric vector
+# with the same number of elements as the number of columns in complete[[i]]. Each element represents the count of
+# missing values in the corresponding column.
+# "colSums(is.na(complete[[i]])) == 0" creates a logical vector indicating which columns have no missing values.
+# It returns TRUE for columns with no missing values and FALSE otherwise.
+# "complete[[i]][, colSums(is.na(complete[[i]])) == 0]" selects columns from the proteomics matrix where the
+# corresponding column in colSums(is.na(complete[[i]])) == 0 is TRUE. In other words, it keeps only the columns
+# that have no missing values.
+complete[[1]] <- complete[[1]][, colSums(is.na(complete[[1]])) == 0];
+complete[[2]] <- complete[[2]][, colSums(is.na(complete[[2]])) == 0];
+complete[[3]] <- complete[[3]][, colSums(is.na(complete[[3]])) == 0];
+
+# Remove features with near zero variance and retain top 100 features having higher variance.
+# First, we define the number of features we want to retain.
+# We loop on each one of the data matrices.
+# "nearZeroVar()", from the caret package, is used to identify variables with near-zero variance, which means they
+# have very little or no variation in their values. The resulting indices are stored in the "idx" variable.
+# Then, if the length of the "idx" variable is not zero, the expression "complete[[i]][, -idx]"" is used to subset
+# the i-th element of complete and remove the columns specified by the idx variable. Then, it modifies the i-th
+# element within the "complete" list by removing the columns identified by "idx" from that element.
+# The modified element is then assigned back to the i-th position in the "complete" list.
+# "if(ncol(complete[[i]]) <= nf)" next is a conditional statement which checks if the number of columns (features) in
+# the modified i-th element of "complete" is less than or equal to "nf" (100 in this case). If it is, the "next"
+# keyword is used to skip the remaining operations within the loop for the current i and move on to the next
+# iteration.
+# "vars <- apply(complete[[i]], 2, var);" calculates the variance of each column (feature) in the modified i-th
+# element of "complete".
+# "idx <- sort(vars, index.return=TRUE, decreasing = TRUE)$ix;" sorts the variance values ("vars") in descending
+# order and retrieves the corresponding indices ("ix"). It stores the sorted indices in the "idx" variable.
+# Finally, "complete[[i]] <- complete[[i]][, idx[1:nf]];" keeps only the top 100 features in the modified i-th
+# element of "complete". It uses the sorted indices "idx" to select the first "nf" elements and retains only those
+# columns. The modified matrix is then assigned back to the i-th position in the "complete" list.
+# (Removed 418 features from PRAD_miRNASeqGene-20160128)
+# (Removed  1334 features from PRAD_RNASeq2Gene-20160128)
+# (Removed  0 features from PRAD_RPPAArray-20160128)
+nf <- 100;
+for(i in 1:length(complete)) {
+    idx <- caret::nearZeroVar(complete[[i]])
+    message(paste("Removed ", length(idx), "features from", names(complete)[i]));
+    if(length(idx) != 0)
+        complete[[i]] <- complete[[i]][, -idx];
+
+    if(ncol(complete[[i]]) <= nf) next
+    
+    vars <- apply(complete[[i]], 2, var);
+    idx <- sort(vars, index.return = TRUE, decreasing = TRUE)$ix;
+    
+    complete[[i]] <- complete[[i]][, idx[1:nf]];
+}
+
+# Perform features standardization using z-score:
+zscore <- function(data) {
+    zscore_vec <- function(x) { return ((x - mean(x)) / sd(x))}
+    data <- apply(data, 2, zscore_vec)
+    return(data)
+}
+
+complete <- lapply(complete, zscore);
+
+# Clean barcodes retaining only "Project-TSS-Participant":
+for(v in 1:length(complete))
+    rownames(complete[[v]]) <- substr(rownames(complete[[v]]), 1, 12);
+```
+
+# Download the desease subtypes (3 - 4)
+
+```{r}
+# Download disease subtypes (prostate adenocarcinoma) from TCGAbiolinks. The column “Subtype_Integrative” is the
+# one containing the iCluster molecular subtype.
+subtypes <- as.data.frame(TCGAbiolinks::PanCancerAtlas_subtypes());
+subtypes <- subtypes[subtypes$cancer.type == "PRAD", ];
+
+# Retain only primary solid tumors and select samples in common with omics data
+# (in the same order):
+subtypes <- subtypes[TCGAutils::TCGAsampleSelect(subtypes$pan.samplesID, "01"), ];
+
+# Retain from the subtypes only information regarding samples in the multi-omic dataset.
+# "substr(subtypes$pan.samplesID,1,12)" extracts the first 12 characters from the "pan.samplesID" column in
+# "subtypes".
+# "%in%" checks if each element in the left-hand side vector (substrings) is present in the right-hand side vector
+# (rownames of the first matrix in "complete").
+# Overall, the condition "substr(subtypes$pan.samplesID,1,12) %in% rownames(complete[[1]])"" checks if the first 12
+# characters of the "pan.samplesID" column in "subtypes" match any of the row names of the first element in 
+# "complete"
+sub_select <- substr(subtypes$pan.samplesID, 1, 12) %in% rownames(complete[[1]]);
+subtypes <- subtypes[sub_select, ];
+
+# Count the occurrences of TRUE (248)
+count <- sum(as.numeric(sub_select))
+print(count);
+
+# This line of code assigns new row names to "subtypes" based on a substring of the "pan.samplesID" column.
+rownames(subtypes) <- substr(subtypes$pan.samplesID, 1, 12);
+
+# Remove subtypes without an associate multi-omic sample
+subtypes <- subtypes[rownames(complete[[1]]),];
+
+# Remove all the rows with a Nan value in the Subtype_Integrative column. that is, all the rows without an
+# associated iCluster molecular subtype.
+subtypes <- subtypes[!is.na(subtypes$Subtype_Integrative), ];
+
+# Retain from the multi-omics dataset only samples having an associated subtype
+for (i in 1:length(complete))
+	complete[[i]] <- complete[[i]][rownames(subtypes), ];
+
+# Print number of samples for each subtype:
+table(subtypes$Subtype_Integrative);
+```
+
+```{r}
+# Compute similarity matrix for each data source using the scaled exponential Euclidean distance:
+similarity_matrix <- list();
+for(i in 1:length(complete)) {
+	# Compute the distance between the rows of the matrix
+    dist <- (dist2(as.matrix(complete[[i]]), as.matrix(complete[[i]])))^(1/2);
+    
+    # Compute the similarity matrix
+    similarity_matrix[[i]] <- affinityMatrix(dist, K = 20);
+}
+```
+
+# Similarity Network Fusion (5)
+
+```{r}
+# Integration of multi-omics data using Similarity Network Fusion:
+M_SNF <- SNF(similarity_matrix, K = 20, t = 20)
+```
+
+# Mean Fusion (6)
+
+```{r}
+# Integration of multi-omics data using the average. This can be considered as a trivial multi-omics data
+# integration strategy.
+# The "Reduce()"" function is used to reduce the elements of "similarity_matrix" by applying the "+" operator.
+# In other words, it sums up all the elements in the "similarity_matrix".ing the average
+M_Mean <- Reduce("+", similarity_matrix) / length(similarity_matrix)
+```
+
+# PAM (()
+
+```{r}
+clusterings = list();
+```
+
+```{r}
+k <- length(unique(na.omit(subtypes$Subtype_Integrative)));
+
+# OMIC (a)
+# You can pass to PAM a dist object (create using as.dist() on the distance matrix) or directly the matrix.
+# In this last case, set diss=TRUE in pam.
+for (i in 1:length(assays)) {
+	dist <- 1 - NetPreProc::Prob.norm(similarity_matrix[[i]]);
+	clusterings[assays[[i]]] <- list(pam(dist, k = k, diss = TRUE, keep.diss = TRUE));
+}
+
+# MEAN (b)
+# Partitioning around Medoids on M_Mean 
+dist <- 1 - NetPreProc::Prob.norm(M_Mean);
+clusterings$Meanpam <- pam(dist, k = k, diss = TRUE, keep.diss = TRUE);
+
+# SNF (c)
+# Partitioning around Medoids on M_SNF 
+# We don't use NetPreProc because SNF has already normalized the matrix.
+dist <- 1 - M_SNF
+clusterings$SNFpam <- pam(dist, k = k, diss = TRUE, keep.diss = TRUE);
+
+
+# Spectral clustering (9)
+
+```{r}
+# Spectral clustering on SNF matrix
+clusterings$SNFspectral$clustering <- SNFtool::spectralClustering(M_SNF, K = k)
+```
+
+# Graphs (10)
+
+```{r}
+# iCluster results
+labels <- as.numeric(factor(subtypes$Subtype_Integrative, levels=unique(subtypes$Subtype_Integrative)));
+```
+
+```{r}
+# For each element "c" in the "clusterings" list, we calculate the frequency of each unique value in the
+# "clustering" column of the DataFrame "c" using the table() function and then we represent them.
+df <- as.data.frame(lapply(clusterings, function (c) as.vector(table(c$clustering))))
+row.names(df) <- paste0("Cluster #", 1:3)
+df$iCluster <- as.vector(table(labels))
+t(df)
+```
+
+```{r}
+types = c("adjrand", "fmi", "jaccard", "nmi1", "rand", "vi")
+df <- as.data.frame(lapply(clusterings, function (c) mclustcomp(c$clustering, labels, types = types)$scores))
+row.names(df) <- types
+
+# the round function is used to round the scores to four decimal places, and the transpose (t) of the data frame is done to display the results in a more readable format.
+round(t(df), 4)
+```
+
+```{r}
+oldp <- par(mar = c(0, 9.0, 0, .2))
+
+data <- matrix(nrow = k, ncol = length(clusterings) + 1)
+for (i in 1:length(clusterings))
+	data[,i] <- as.vector(table(clusterings[[i]]$clustering))
+data[,length(clusterings) + 1] <- as.vector(table(labels))
+
+experiments = c("Spectral Clustering", "SNF integration", "Average integration", "Proteins", "mRNA", "miRNA")
+data = data[, rev(seq_len(ncol(data)))]
+barplot(data, names.arg = append(names(clusterings), "iCluster"),
+  horiz = TRUE, las = 1, col = c("#FCB1A6", "#FB6376", "#7B8CDE"),
+  xaxt='n')
+```
+
+```{r}
+# plot(princomp(complete[[3]])$scores, col = clusterings$SNFpam$clustering, main = "SNF (PAM)")
+# #fviz_pca_ind(res.pca<-prcomp(as.dist(1-M_SNF)),
+#             palette = c("#8be04e", "#FB6376", "#0d88e6"),
+#             addEllipses = TRUE,
+#             ellipse.type = "convex",
+#             legend.title = "Clusters",
+#             repel = TRUE
+#             )
+```
+
+```{r}
+# Plot pca results
+pca <- function(data, clusters, title) {
+  # Perform pca selecting only the two features with highest variance
+  res.pca <- prcomp(data)
+  # Plot the result
+  fviz_pca_ind(res.pca,
+    geom.ind = "point",                   			# Point to not show text
+    col.ind  = as.factor(clusters),       			# Color of the points to be the clusters
+    palette = c("#8be04e", "#FB6376", "#0d88e6"),	# Same colors of the clusters in the barplot
+    addEllipses = TRUE,                   			# Elipse of the clustering region
+    ellipse.type = "convex",              			# Set the 'ellipse' to be the convex hull
+    title=title,                          			# Title of the plot
+    legend.title = "Clusters",            			# Title of the legent
+    ggtheme = theme_bw()                			# Custom theme
+  )  
+}
+
+labels <- as.numeric(factor(subtypes$Subtype_Integrative, levels=unique(subtypes$Subtype_Integrative)));
+
+#png("iClusters.png", width = 1000, height = 1000)
+pca(as.dist(1 - M_SNF), labels, title="iClusters");
+#dev.off();
+
+#png("AverageClusters.png", width = 1000, height = 1000)
+pca(as.dist(1 - NetPreProc::Prob.norm(M_Mean)), clusterings$Meanpam$clustering, title="Average Clusters")
+#dev.off();
+
+#png("SNFClusters.png", width = 1000, height = 1000)
+pca(as.dist(1 - M_SNF), clusterings$SNFpam$clustering, title="Similarity Network Fusion Clusters")
+#dev.off();
+
+#png("SpectralClusters.png", width = 1000, height = 1000)
+pca(as.dist(1 - M_SNF), clusterings$SNFspectral$clustering, title="Spectral Clusters")
+#dev.off();
+```

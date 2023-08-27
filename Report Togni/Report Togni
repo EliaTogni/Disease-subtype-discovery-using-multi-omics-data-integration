@@ -1,0 +1,424 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{authblk}
+\usepackage{setspace}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{graphicx}
+\graphicspath{ {./figures/} }
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\arabic{subsection}}
+\newcommand{\RomanNumeralCaps}[1]{\MakeUppercase{\romannumeral #1}}
+
+
+%%%%%% Bibliography %%%%%%
+% Replace "sample" in the \addbibresource line below with the name of your .bib file.
+\usepackage[style=numeric, backend=biber, sorting=none]{biblatex}
+\addbibresource{sample.bib}
+
+%%%%%% Title %%%%%%
+% Full titles can be a maximum of 100 characters, including spaces. 
+% Title Format: Use title case, capitalizing the first letter of each word, except for certain small words, such as articles and short prepositions
+\title{Disease subtype discovery using multi-omics data integration}
+
+%%%%%% Authors %%%%%%
+% Authors should be listed in order of contribution to the paper, by first name, then middle initial (if any), followed by last name.
+% Authors should be listed in the order in which they will appear in the published version if the manuscript is accepted. 
+% Use an asterisk (*) to identify the corresponding author, and be sure to include that person’s e-mail address. Use symbols (in this order: †, ‡, §, ||, ¶, #, ††, ‡‡, etc.) for author notes, such as present addresses, “These authors contributed equally to this work” notations, and similar information.
+% You can include group authors, but please include a list of the actual authors (the group members) in the Supplementary Materials.
+\author[1]{Elia Togni}
+
+%%%%%% Affiliations %%%%%%
+\affil[1]{Dipartimento di Informatica, Università degli Studi di Milano.}
+
+%%%%%% Date %%%%%%
+% Date is optional
+\date{}
+
+%%%%%% Spacing %%%%%%
+% Use paragraph spacing of 1.5 or 2 (for double spacing, use command \doublespacing)
+\onehalfspacing
+
+\begin{document}
+
+\maketitle
+
+%%%%%% Abstract %%%%%%
+\begin{abstract}
+Prostate adenocarcinoma, a prevalent malignancy among men worldwide, exhibits substantial heterogeneity in its clinical presentation and molecular characteristics. The work presented in this report proposes and explores additional methods to identify the prostate cancer molecular disease subtypes using multi-omics data, considering the three subtypes identified by the TCGA Network with the \textit{iCluster} technique as a baseline.\newline
+After a preprocessing phase, the work integrates the multi-omics data using firstly an average baseline integration and secondly using a graph-based integration algorithm denominated \textbf{Similarity Network Fusion}.\newline
+For the clustering aspect, we choose to cluster the patients in the similarity networks using both the \textbf{Partitioning Around Medoids} and \textbf{Spectral Clustering} methods. Once the clustering process is completed, we are able to evaluate the computed outcomes in accordance with the identified disease subtypes for prostate cancer using \textit{iCluster}.\newline
+This study demonstrated a heightened capability for clustering within the multi-omics data when integrated with SNF. Conversely, employing the simple integration approach may diminish the potential of a singular omics source. Moreover, the findings showed a preference for the PAM algorithm over Spectral Clustering. Consequently, the integration of SNF coupled with PAM clustering yielded a cluster more similar to the \textit{iCluster} ones in our study.
+\end{abstract}
+
+%%%%%% Main Text %%%%%%
+
+\section{Introduction}
+ 
+\subsection*{The problem of disease subtype discovery from multi-omics data}
+Recents advancements in technology have facilitated the generation of diverse genome-wide high-throughput biological data types, collectively referred to as \textbf{omics} \cite{Rappoport}. Omic is a suffix used to refer to different fields of study that involve comprehensive analysis of a specific biological component or aspect. The term \textbf{multi-omic} typically denotes a multidimensional approach to studying biological systems on a large scale, encompassing various molecular components, such as genes (\textbf{genomics}), proteins (\textbf{proteomics}), metabolites (\textbf{metabolomics}), and more \cite{Gliozzo1}. The omic sciences aim to understand the complex interactions and functions of these components to gain insights into biological processes. By utilizing the omic approach, researchers seek a comprehensive grasp of biological systems at a molecular level, exploring the intricate networks and relationships that contribute to an organism's structure, function and behavior, trying to reveal more holistic, systems-level insights \cite{Rappoport}.
+
+The wealth of these omic profiles gathered from large cohorts in recent years presents a unique opportunity to also gain a deeper understanding of human diseases. These profiles can serve as valuable resources for characterizing diseases more comprehensively, thus facilitating the development of personalized treatment strategies tailored to individual patients \cite{Rappoport}. This is an integral part of what is known as \textbf{personalized medicine} \cite{Gliozzo1}.
+
+In the field of oncology, the analysis of extensive datasets has led to the identification of novel cancer subtypes, revolutionizing treatment decision-making \cite{Rappoport}. 
+However, typically, the attained results are based on the analysis of a single omic rather than being derived from a comprehensive analysis of multiple data sources. Since the molecular complexity of a tumor manifests itself at the omics levels, genomic profiling at these multiple strata allows a better integrated characterization of tumor etiology \cite{Shen}.\newline
+Identifying tumor subtypes by simultaneously analyzing \textbf{multi-omic data} is, therefore, a relatively new problem. In fact, since initiatives like \textbf{The Cancer Genome Atlas} \cite{Network} have made multi-omic cohort data largely available, there has been a pressing need for improved and advanced methodologies that enable the integrated analysis of these datasets.
+
+The Cancer Genome Atlas Program \cite{Network} (henceforth referred to as \textbf{TCGA}) is a pioneering cancer genomics program that originated in the United States, bringing together researchers from diverse disciplines. Over the years, TCGA has produced more than $2.5$ petabytes of publicly available genomic, epigenomic, transcriptomic, and proteomic data \cite{Network}. It encompasses data from more than $11,000$ cases across $33$ tumor types, generating an extensive and comprehensive dataset that describes the molecular changes occurring in cancer. This project is the coordinated effort of the \textbf{National Cancer Institute} (\textbf{NCI}) and of the \textbf{National Human Genome Research Institute} (\textbf{NHGRI}) to explore the entire spectrum of genomic alternations in human cancer to obtain an integrated view of the molecolar features of cancers \cite{Shen, Hutter}. Therefore, the value of the TCGA dataset cannot be overstated. Its vastness has, in fact, allowed researchers to document specific genomic and molecular changes in cancer, establish a more meaningful taxonomy of cancer types and subtypes and even explore questions that were not initially envisioned during the project's planning \cite{Hutter}.
+
+The simplest way utilized in the past to combine biological data was to concatenate normalized measurements from various biological domains for each sample. Regrettably, the act of combining different types of data makes it more challenging to discern meaningful information from the background noise within each type of data. This is likely due to the inherent differences in the data formats and characteristics of the various data types being merged, which may create more complexity and noise when combined together. Concatenation further dilutes the already low signal-to-noise ratio in each data type \cite{Wang}. To avoid this, a common strategy was to also analyze each data type independently before combining data. In fact, the most used approach to subtype discovery across multiple types in the past years was to separately cluster each type and, then, to manually integrate the result. Researchers often resorted to heuristic approaches where manual integration was performed after separate analysis of individual data types, and it was unlikely that two investigators would perform manual integration in the same manner. Manual integration also may require a considerable amount of prior knowledge about the underlying disease \cite{Shen}. Therefore, such independent analyses often led to inconsistent conclusions that were hard to integrate \cite{Wang}.
+
+\subsubsection*{Multi-omics clustering methods}
+The field was now confronted with the need to develop innovative computational methodologies that could seamlessly merge data from genomics, transcriptomics, proteomics, and beyond.
+
+A pivotal journey in the evolution of bioinformatics has been the transition from the analysis of single omic data to the integration of multiple omic dimensions.\newline
+Within the data integration flow, two broad classifications (Figure \ref{fig:1}) have been established by existing literature: the first classification refers to the \textbf{horizontal integration approaches} and the second one refers to the \textbf{vertical integration approaches}. Horizontal integration approaches fuse \textbf{multisets} (e.g. datasets where each view is acquired by the same source under different conditions) by independently applying the same procedure on each view and then merging the individual results. On the other hand, vertical integration approaches fuse \textbf{multimodal datasets} (e.g. datasets composed by semantically different views) through more complex techniques, further categorized as \textbf{hierarchical–vertical integration} methods and \textbf{parallel–vertical integration} techniques. The former fuse data views following a \textbf{hierarchy} driven by biological a priori knowledge whereas the latter do not exploit knowledge-based dependencies between views. \textbf{Parallel-vertical integration} methods are the most diffused integration methods; they are further classified based on the phase when the data \textbf{integration-step} is performed with respect to the model construction \cite{Gliozzo2}. The simplest parallel-vertical integration approach, called \textbf{early integration} (also named \textbf{concatenation-based method}), is applied on the input data in an early stage and it concatenates all omic matrices into one and applies single-omic clustering on it. The evident advantage of early methods relies on their ability to uncover the individual information characterizing each of the different sources as well as the hidden relationships between them. Another considerable advantage is brought by the fact that early methods solve the integration problem in the first stage, so that any unimodal analysis (statistical analysis of data that involves a single variable) process may be subsequentially applied. Nevertheless, these methods suffer from the increasing of the dimensionality of the data. They also ignore the different distributions of values in different omics.\newline
+Another approach, called \textbf{late integration} method (also named \textbf{model-based method}), clusters each omic separately, and then integrates in a late phase the clustering results. Its strength relies on its capacity to use readily available tools designed specifically for each omics type, and compared to the other strategies, it does not suffer the challenges of trying to assemble different kinds of data. This approach has, however, the flaw of ignoring interactions that are weak but consistent across omics, discarding in this way an important piece of information \cite{Rappoport, Picard}. These approaches along with the early integration ones are classified as \textbf{model-agnostic}, because they are independent from the specific algorithm applied in the preceding unimodal analysis, which can be therefore tailored to the processed type \cite{Gliozzo2}.\newline
+Finally, an ulterior integrative clustering approach, which accounts for all omics, is the one called \textbf{middle integration}. It allows joint inference from multi-omic data and generates a single integrated cluster assignment through simultaneously capturing patterns of genomic alterations that are consistent across multiple data types, specific to individual data types or weak yet consistent across datasets that would emerge only as a result of combining levels of evidence.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=10cm]{figures/Gliozzo2.png}
+\caption {Schema of the main taxonomies proposed in literature for categorizing multimodal integration methods \protect\cite{Gliozzo2, Pavlidis, Daemen, Zitnik, Li, Momeni, Gligorijevic, Baltrusaitis}.}
+\label{fig:1}
+\end{figure}
+
+However, this data-integration method needs to overcome at least three \textbf{computational challenges} \cite{Wang}: 
+\begin{itemize}
+\item the small number of samples compared to the large number of measurements;
+\item the differences in scale, collection bias and noise in each data set;
+\item the complementary nature of the information provided by different types of data.
+\end{itemize}
+
+In addition to the computational ones, it is possible to underline two other major challenges to the development of a truly integrative approach. First, to capture both concordant and unique alterations across data types, separate modeling of the covariance between data types and the variance–covariance structure within data types is needed. Most of the existing deterministic clustering methods cannot be easily adapted in this way \cite{Shen}.\newline
+Second, \textbf{dimension reduction} plays a crucial role in making integrative clustering approaches feasible and efficient. Utilizing pairwise correlation matrices for such methods becomes computationally impractical, especially with modern high-resolution arrays. To address this, dimension reduction techniques like \textbf{Principal Component Analysis} (\textbf{PCA}) \cite{Bro} and \textbf{Non-Negative Matrix Factorization} (\textbf{NMF}) have been proposed to work alongside clustering algorithms effectively. While these techniques are successful for individual data types, they are limited in their ability to simultaneously reduce dimensions for multiple correlated datasets \cite{Shen}.\newline
+Therefore, because of the high number of features and because of the complexity of dimension reduction algorithms, feature selection is required \cite{Rappoport}. 
+
+Conversely, similarity based methods address these limitations by utilizing \textbf{inter-patient similarities}. Such approaches exhibit enhanced computational efficiency and reduced dependence on selecting features.\newline
+All middle integration methods for multi-omics clustering developed within the bioinformatics community assume full datasets, e.g. data from all omics were measured for each patient. Nonetheless, in practical experimental setups, it is a frequent scenario that, for certain patients, only a subset of the omics are actually measured. These datasets are called \textbf{partial datasets} \cite {Rappoport}. This occurrence is already observable in existing multi-omic datasets and is projected to intensify as study cohorts expand. Being able to analyze partial data holds immense significance due to the substantial costs associated with experiments and the uneven expenses associated with obtaining data for diverse omics. Naive solutions like using only those patients with all omics measured or \textbf{imputation} (the assignment of a value to something by inference from the value of the products or processes to which it contributes) have obvious disadvantage \cite{Shen}.
+
+%%%%%% Figures %%%%%%
+\subsection*{Prostate adenocarcinoma}
+The case of study of this report is the \textbf{prostate cancer}, a cancer type that affects the prostate gland and which is the second most common cancer type among men and, in general, ranking fourth in frequency worldwide \cite{Network}. A combination of genetic and demographic factors like age, family history, genetic susceptibilityt and race contribute to its high incidence \cite{Network}. 
+
+The clinical behavior of localized prostate cancer can be extremely heterogeneous, with some individuals having aggressive cancer that can spread and cause death, while others have indolent cancer that can be treated or observed safely \cite{Network}. Several genetic and epigenetic alterations are highly prevalent and appear to be essential factors in the tumorigenesis and progression of cancer.
+
+To better predict the likelihood of progression and tailor treatment accordingly, \textbf{risk stratification systems} that take into account various clinical and pathological parameters  have been developed \cite {Network}. \textbf{Risk stratification} is the process of categorizing individuals or entities into different \textbf{risk levels} based on certain characteristics or factors in order to predict the likelihood of an event or outcome occurring and, therefore, risk stratification systems are tools employed to assign individuals or entities to specific risk categories. These systems aim to identify individuals at higher risk for aggressive disease and guide treatment decisions, taking into account factors such as \textbf{prostate-specific antigen} (\textbf{PSA}) levels, \textbf{Gleason score} (a measure of cancer aggressiveness based on biopsy samples), clinical stage, and other factors \cite{Network}.
+
+Despite these systems' usefulness, it is fundamental to keep in mind that they are not perfect, and there is still a need for improved risk stratification. This is where molecular features come into play. Molecular and genetic profiles are, in fact, increasingly being used to subtype various cancer types and guide targeted treatment interventions \cite{Network}.
+
+Recent research has identified several genomic alterations as key features of primary prostate cancer, including \textbf{mutations} (changes in the DNA sequence, where one or more nucleotides are altered), \textbf{DNA copy-number changes} (changes in the number of copies of a specific DNA sequence or gene in a cell's genome), \textbf{rearrangements} (changes in the structure or arrangement of larger segments of DNA, such as genes or whole chromosomes), and \textbf{gene fusions} (the joining or fusion of two separate genes, resulting in the formation of a hybrid gene). The most common genomic alteration in prostate cancer is the fusion of \textbf{androgen-regulated promoters}, regions of DNA that control the expression of genes in response to androgen hormones, such as testosterone, with members of the \textbf{ETS family} of transcription factors such as ERG \cite{Network}. The ETS family is a group of genes that encode proteins involved in regulating gene expression. These transcription factors control the activity of various genes, influencing important cellular processes like growth, differentiation, and development.\newline
+However, individuals with fusion-bearing tumors do not appear to have a different prognosis following treatment than those without \cite{Network, Gopalan}.\newline
+Prostate cancers also have varying degrees of DNA copy-number alteration, with indolent and low-Gleason tumors having fewer alterations, while more aggressive tumors have a higher burden of copy-number alteration throughout the genome \cite{Network, Taylor}.
+
+Further research on the molecular basis of prostate cancer and risk stratification could help identify those at higher risk of developing aggressive disease, leading to better treatment options and outcomes for patients. Therefore, there is a need to continue studying the molecular characteristics of prostate cancer to develop better risk stratification and treatment strategies.
+
+\subsection*{Synopsis}\label{sec:Syn}
+With the aforementioned in mind, the work presented in this report proposes and explores additional methods to identify the prostate cancer molecular disease subtypes using multi-omics data, considering the three subtypes identified by the TCGA Network with the \textit{iCluster} technique \cite{Abeshouse} as a baseline. Their study involved the analysis of $333$ primary prostate cancers through seven genomics platforms, leading to the recognition of three distinct categories of prostate cancers \cite{Network}. The first group displayed predominantly unaltered genomes, the second group, constituting half of all tumors, showed an intermediate level of \textbf{somatic copy number alterations} (\textbf{SCNAs}), and the third group exhibited a heightened frequency of genomic gains and losses affecting chromosome arms.
+
+The main contribution of the research presented in our report is therefore to analyze how the integration of different biological data sources to create similarity networks combined with clustering methods can approximate the clustering into the three subtypes obtained by the TCGA Network research.\newline
+Hence, the present study permit to formulate different Research Questions.
+
+The first Research Question \label{first} delves into the performance of multi-omics data utilization in comparison to the single omics similarity matrix. It seeks to discern whether the application of multi-omics data yields enhanced outcomes.
+
+The second Research Question \label{second} revolves around the evaluation of integration techniques within multi-omics data. Specifically, it investigates whether the Similarity Network Fusion method outperforms the simple averaging technique when integrating diverse data types.
+
+The third Research Question \label{third} refers to the choice of clustering algorithms in the context of Similarity Network Fusion. By comparing Spectral Clustering and the PAM algorithm, it aims to identify the superior clustering approach that complements the chosen integration technique.
+
+Lastly, the fourth Research Question \label{fourth} aims to assess the efficacy of the proposed techniques in approximating the \textit{iCluster} disease subtypes. This inquiry seeks to determine if any of the suggested methods yield accurate estimations of these subtypes.
+
+The work integrates the multi-omics data using firstly an average baseline integration and secondly using a graph-based integration algorithm denominated \textbf{Similarity Network Fusion} \cite{Wang}.\newline
+For the clustering aspect, we choose to cluster the patients in the similarity networks using both the \textbf{Partitioning Around Medoids} \cite{Kaufman} and \textbf{Spectral Clustering} \cite{Luxburg} methods. Once the clustering process is completed, we are able to evaluate the computed outcomes in accordance with the identified disease subtypes for prostate cancer using \textit{iCluster}.
+
+The remainder of this work is organized as follows. Section \hyperref[sec:Methodology]{\RomanNumeralCaps{2}} describes the data integration and clustering approaches exploited while describing the used dataset, considering disease subtypes and explaining the data-preprocessing techniques applied. Section \hyperref[sec:Statistical]{\RomanNumeralCaps{3}} explains the methodology used to validate the proposed solution, considering the employed metrics to validate the clustering with the disease subtypes. Finally, Section \hyperref[sec:Results]{\RomanNumeralCaps{4}} presents the main results obtained from the experimental procedure and presents the following conclusions.
+
+\section{Methodology}\label{sec:Methodology}
+\subsection{Overview}
+This section describes an overview of the proposed procedure (Figure \ref{fig:2}) for prostate adenocarcinoma subtype discovery on multi-omics data through similarity networks and clustering methods.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=15cm]{figures/Methodology Overview.png}
+\caption{Overview of the proposed methodology}
+\label{fig:2}
+\end{figure}
+
+The process initiates by extracting the pertinent data from the TCGA dataset \cite{Network}. The disease code to fetch for prostate adenocarcinoma is PRAD. Specifically, this endeavor acquires data related to \textbf{mRNA}, \textbf{miRNA} and \textbf{proteins}, corresponding to \textit{RNASeq2Gene}, \textit{miRNASeqGene}, and \textit{RPPAArray} assays within the TCGA toolkit.\newline
+Upon obtaining the desired omics data, each type undergoes treatment in a data preprocessing pipeline \ref{fig:5}. This pipeline encompasses various tasks, such as data cleansing and feature selection. Post-cleansing, the subsequent steps involve constructing the \textbf{similarity matrices} for each omic, utilizing the \textbf{scaled exponential Euclidean distance}. With the similarity matrices, we can perform the data integration of the omics, creating a single integrated matrix representing multi-omics information. Consequently, two distinct approaches are employed for integration: a simple average method and the Similarity Network Fusion method \cite{Wang}.\newline
+Finally, both the integrated matrices and the individual omics' similarity matrices undergo independent clustering using the Partitioning Around Medoids clustering algorithm \cite{Kaufman}. This facilitates a comparative evaluation of each integration technique (as depicted in Figure \ref{fig:2}). Additionally, the SNF matrix undergoes clustering using the Spectral Clustering algorithm \cite{Luxburg}, enabling a comparative assessment of clustering methodologies as well.
+
+This research was implemented using the R programming language with the help of the BiocManager package manager for the \textit{curatedTCGAData}, \textit{TCGAutils}, \textit{TCGAbiolinks} libraries. Those BiocManager libraries formed the primary interface for dataset communication and manipulation. Furthermore, \textit{SNFtool} was employed for the SNF and Spectral Clustering, \textit{cluster} for the PAM algorithm, \textit{mclustcomp} for clustering metrics, \textit{factoextra} for dimensionality reduction and cluster representation, \textit{NetPreProc} for computing the distance matrices and \textit{caret} for data preprocessing.
+
+\subsection{Multi-omic Dataset}
+As above-mentioned and saw in Figure \ref{fig:2}, we will download \textbf{multi-omics} data from patients having prostate cancer. All omics data are high-dimensional and characterized by \textbf{small-n large-p} (e.g. few samples and a large number of features), which easily leads to the \textbf{curse of dimensionality} \cite{Gliozzo1} in machine learning applications, which can be defined as the deterioration of algorithm performance caused by the exponential growth of data volume as the number of input features or dimensions increases. In fact, as the dimensionality of the data grows, the available data becomes increasingly sparse in the high-dimensional space, resulting in difficulties in accurately representing and analyzing the data.
+
+In particular, we exploit the package \textit{curatedTCGAData} to download the following data views from TCGA:
+\begin{itemize}
+\item \textbf{mRNA data};
+\item \textbf{miRNA data};
+\item \textbf{protein data}.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=13cm]{figures/MultiAssaysExperiment object.png}
+\caption{A MultiAssayExperiment object}
+\label{fig:3}
+\end{figure}
+
+As we can see, we obtain a \textbf{MultiAssayExperiment} object, which, in its essence, is a data structure designed to store and coordinately analyze multi-omics experiments. The three main components of this data structure are \cite{Gliozzo1}:
+\begin{itemize}
+\item \textbf{colData}: it contains a dataframe having for each sample the corresponding phenotipic characteristics (in our case mainly clinical data);
+\item \textbf{ExperimentList}: a list with the considered experiments (e.g. data modalities acquired with a specific technology). Element of the list are usually matrices or dataframes;
+\item \textbf{sampleMap}: it is a map that connects all the considered elements.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=7cm]{figures/MultiAssaysExperiment.png}
+\caption {MultiAssayExperiment's structure \protect{\cite{Gliozzo1, Ramos}}}
+\label{fig:4}
+\end{figure}
+
+Especially the generated MultiAssayExperiment had three experiments:
+\begin{itemize}
+\item \textbf{PRAD\_RNASeq2Gene-20160128}, comprised of $20501$ rows and $550$ columns;
+\item \textbf{PRAD\_miRNASeqGene-20160128}, comprised of $1046$ rows and $547$ columns;
+\item \textbf{PRAD\_RPPAArray-20160128}, comprised of $195$ rows and $352$ columns.
+\end{itemize}
+
+Each experiment is also a data structure of its own, denominated \textbf{SummarizedExperiment}.
+
+\subsection{Data Preprocessing}
+This section describes the developed pipeline (Figure \ref{fig:5}) for prostate adenocarcinoma subtype discovery on multi-omics data through similarity networks and clustering methods, inspired by \cite{Gliozzo1}.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=15cm]{figures/Pipeline.png}
+\caption {Schema of the data preprocessing pipeline}
+\label{fig:5}
+\end{figure}
+
+Since data comes from TCGA, it is important to understand the structure of the \textbf{barcode} associated to each sample. A TCGA barcode is composed of a collection of identifiers. Each sample/patient is identified by one of these codes with a specific structure: in pratice, the first 12 characters of the barcode correspond to a specific individual, while the other parts give us indications about the type of sample (e.g. primary, metastatic, solid, blood derived, etc), the type of genomic material extracted (e.g. DNA, RNA) and other information related to technical replicates (e.g. repeated measurements from the same sample). Each specifically identifies a TCGA data element.\newline 
+We use the barcode to retain only \textbf{Primary Solid Tumors} to have a more homogeneous group of samples and to check for the presence of technical replicates in the dataset. We consider only primary solid tumors because primary tumors originate in a specific organ or tissue and are generally more consistent in terms of location, size, and characteristics compared to metastatic tumors (secondary tumors that spread from the primary site). Focusing on these kind of tumors helps maintain statistical validity by comparing similar types of tumors, reducing variability and confounding factors that may arise from studying different metastatic sites.
+We also utilize the function \textit{anyReplicated()}, which checks the so called biological or primary unit for replicates in the sampleMap of the MultiAssayExperiment object, that corresponds to the first 12 characters of the barcodes for TCGA data. In fact, if two samples have the same 12 characters in their barcodes, then they come from the same patient and can be identified as technical replicated (since we already filtered for the same sample type). Since
+repeated measurements taken from the same sample are not attractive to the application, we remove them. The outcome \textit{FALSE} indicates that there were no replicates.
+
+Then, other additional pre-processing steps are performed:
+\begin{itemize}
+\item the removal of \textbf{FFPE} (\textbf{formalin-fixed, paraffin-embedded}) samples. Broadly speaking, after a biopsy is performed we need to store and preserve the sample. Two major tissue preparation methods are generally used:\begin{enumerate}
+\item FFPE;
+\item freezing the sample.
+\end{enumerate}
+DNA and RNA molecules are preserved better if the tissue is frozen, thus we will remove samples preserved using FFPE technique;
+\item the restriction of samples to the ones having all the considered omics, disregarding all samples of patients which do not present mRNA, miRNA and protein data, and the extraction of the set of omics (one matrix for each omic) in a list;
+\item the transposition of each matrix to have samples in the rows and features in the columns;
+\item the removal of the features having missing values (e.g. NA). In this case, it is easier to remove features instead of performing imputation, since only few features in the proteomics data have missing values (Figure \ref{fig:5}, second row);
+\item the selection of features having more variance across samples. Here we make a strong assumption: features that have more variance across samples bring more information and are the more relevant ones. This feature selection strategy is fast and commonly used in literature, however it has some drawbacks:\begin{enumerate}
+\item it is univariate, thus does not considers interactions among features. In univariate analysis, any covariation with other variables is explicitly neglected and this may lead to important features being ignored \cite{Gliozzo1};
+\item it is not able to remove redundant variables \cite{Gliozzo1}.
+\end{enumerate}
+Moreover, we need to identify a threshold for feature selection (in our case, the threshold we selected is defined by the top $100$ features) but it is always an arbitrary choice;
+\item the standardization of features using \textbf{Z-score}. Z-score normalization is a statistical technique representing the number of standard deviations an individual data point is from the mean of a given dataset. This standardization helps understand how far away a data point is from the mean relative to the spread of the data. It is used to transform a dataset so that it has a mean of zero and a standard deviation of one. This process allows us to compare and analyze data that originally had different scales or units. In fact, a positive Z-score indicates that the data point is above the mean, while a negative Z-score indicates that it is below the mean;
+\item the cleaning of barcodes retaining only \textit{Project-TSS-Participant}, that is, the unique identifier for each patient. We substitute the names of the rows with the substring composed by their first 12 characters. With this modification, we can better identify our data rows and provide a simple method of matching the omics data with the disease subtypes;
+\end{itemize}
+
+\subsection{Prostate adenocarcinoma subtypes}
+The classification of a sample to a specific disease subtype helps to predict patients’ prognosis and it has an impact also on the definition of the therapy. Many different tests to define the disease subtype of a prostate cancer patient are available, which consider different subset of genes for the definition of the subtypes. TCGA Research Network provides the subtypes defined using the \textit{iCluster} model \cite{Abeshouse}. We will try to see if the clusters we compute are similar to the \textit{iCluster} disease subtypes for prostate cancer.
+
+We literally are in a new preprocessing phase, this one regarding the subtype dataset instead of the multi-omic set. We will begin fetching the disease subtypes (of prostate adenocarcinoma) from the \textit{TCGAbiolinks} package.
+
+Prostate cancer can be divided into multiple different subtypes classifications. The research by TCGA Network \cite{Abeshouse} unveiled a molecular taxonomy wherein 74\% of the tumors were categorized into seven subtypes based on distinct gene fusions (ERG, ETV1, ETV4, and FLI1) or mutations (SPOP, FOXA1, and IDH1). This classification, regarded as the most significant by the \textit{TCGAbiolinks} package, is employed in their data's \textit{Subtype\_Selected} column.\newline
+However, the TCGA Network in the same research \cite{Abeshouse}, using the \textit{iCluster} technique, were able to identify also three significant groups of prostate cancers, as already mentioned in the \hyperref[sec:Syn]{Synopsis}: one with mostly unaltered genomes, a second group comprised 50\% of all tumours, exhibited an intermediate level of somatic copy number alterations (SCNAs), and a third group with a high frequency of genomic gains and losses at the level of chromosome arms.\newline
+
+These subtypes serve as the foundational reference for the study due to their more accessible subtype classification, while still remains relevant to predicted patient prognoses. Moreover, the \textit{iCluster} subtype holds significance within our particular context, as it originates from a multi-omics integration analysis. As such, this research seeks to ascertain whether the computed clusters using the proposed methodologies exhibit similarities to the prostate cancer disease subtypes, namely the \textit{iCluster} subtypes, as designated by TCGA.
+
+Upon data analysis, it becomes evident that not all subtypes are represented within the subset of samples encompassing all the considered omics data sources. Thus, it became imperative to exclusively incorporate samples from the multi-omics dataset with an associated subtype. Through this process, we were able to sift out samples with the disease subtypes in the designated omics, ultimately shaping the final configuration of the data points.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Subtype 1} & \textbf{Subtype 2} & \textbf{Subtype 3} \\ \hline
+60        & 83        & 105       \\ \hline
+\end{tabular}
+    \caption{number of samples for each subtype found by \textit{iCluster}}
+    \label{tab:1}
+\end{table}
+
+Consequently, the ultimate subtypes database comprised $60$ patients of Subtype $1$, $83$ patients of Subtype $2$, and $105$ patients of Subtype $3$, summing up to a total of $248$ chosen patients for the multi-omics data clustering endeavor. To conclude, our data configuration comprises a vector of $3$ matrices, each representing different omics. Within each matrix, there are $248$ rows (samples/patients) and $100$ columns (selected features with high variance).
+
+\subsection{Data Integration methods}
+We now apply different techniques to integrate the multi-omic data at our disposal.
+The first step, common to all the techniques utilized is the construction of a similarity matrix among samples for each data source. A similarity matrix is a square matrix that quantifies the similarity between pairs of objects or entities. In the context of clustering or data analysis, it is commonly used to represent the pairwise similarities between data points. The similarity measure exploited to determine the weight of the edge is the \textbf{scaled exponential Euclidean distance}. The reasoning for choosing this similarity measure is based on its local normalization of the distance between a central node and any of its neighbours so that distances are independent of the neighbourhood scales \cite{Gliozzo2}.\newline
+With the similarity matrices created, we fuse our prostate cancer multi-omic dataset using two different strategies. The first is a simple average of the matrices, which can be considered a trivial multi-omics data integration strategy. The second is the state-of-the-art approach Similarity Network Fusion \cite{Wang}, implemented in the package \textit{SNFtool}.
+
+\subsubsection{Average}
+Averaging involves combining data from multiple omic datasets by taking the average values of corresponding measurements. However, it may overlook non-linear relationships, specific interactions, or complex regulatory mechanisms that exist between different omic layers. Overall, multi-omic data integration via averaging is a valuable strategy for gaining a first understanding of biological systems by leveraging multiple layers of molecular information and for providing a benchmark for confronting other results obtained.
+
+\subsubsection{Similarity Network Fusion}
+\textbf{Similarity Network Fusion} is a data integration method particolarly useful when dealing with heterogeneous data, where each data source provides complementary information about the underlying system.\newline
+SNF addresses the challenge of integration by establishing networks of samples (e.g. patients) for each accessible data type. These serve as the foundational elements for integration, subsequently merged into a singular network that encapsulates the entire range of underlying data. Consequently, to construct a holistic understanding of a medical condition using a group of patients, SNF calculates and merges patient similarity networks derived from each distinct data type. This process capitalizes on the complementarity in the data to provide a more comprehensive depiction \cite{Wang}.\newline
+This method consists of two main steps (Figure \ref{fig:6}):
+\begin{itemize}
+\item the construction of a sample-by-sample similarity matrix for each chosen data type by using a similarity measure. The matrix is equivalent to a similarity network where nodes are samples and the weighted edges represent pairwise sample similarity;
+\item integration of these networks into a single similarity network using a nonlinear combination method that iteratively updates every network, making it more similar to the others with every iteration. After a few iterations, SNF converges to a single network.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=15cm]{figures/SNF.png}
+\caption {Illustrative example of SNF steps}
+\label{fig:6}
+\end{figure}
+
+This integrative approach offers the benefit of eliminating weak similarities (represented by low-weight edges), which aids in noise reduction. Concurrently, strong similarities (depicted by high-weight edges) found within one or more networks get incorporated into the rest. Moreover, low-weight edges endorsed by all networks are preserved based on the degree of interconnectedness observed within their respective neighborhoods across the networks \cite{Wang}.
+
+In our case, $t = 20$ is the number of iterations and $K = 20$ is the number of neighbours to consider to compute the local similarity matrix.
+SNF has proven successful compared to other relevant fusion methods and outperforms single omics data \cite{Wang}.
+
+\subsection{Clustering Approaches}
+With the integrated multi-omics data, it is now possible to perform disease subtype discovery using the PAM and the Spectral Clustering algorithms.
+
+As we strive to comprehend the influence of the integration techniques and the clustering algorithms, we executed various combinations of clusterings and similarity matrices, listed as follows:
+\begin{itemize}
+\item clustering of the mRNA similarity matrix using PAM;
+\item clustering of the miRNA data using PAM;
+\item clustering of the proteins data using PAM;
+\item clustering of the average data integration using PAM;
+\item clustering of SNF data integration using PAM;
+\item clustering of SNF data integration using Spectral Clustering.
+\end{itemize}
+
+To obtain the similarity matrices for the first three experiments we apply the scaled exponential Euclidean distance to each data source. Then, we cluster indipendently each similarity matrix.
+Each application of the PAM clustering algorithm requires a distance matrix as input. Therefore, to make each single source (mRNA, miRNA, proteins and average) comparable, it is necessary to normalize the distance matrices.
+
+\subsubsection{Partitioning Around Medoids}
+The \textbf{Partitioning Around Medoids} \cite{Kaufman} algorithm is based on the search for a number $k$ (given as input by the user) of representative objects but, instead of the \textbf{centrotypes} \cite{Kaufman} typical of clustering methods such as $K$-Nearest Neighbors, PAM employs actual data points within the cluster called \textbf{medoids}, which are less sensitive to outliers and can provide better cluster representations when dealing with non-linear or asymmetric data \cite{Kaufman}. After finding a set of $k$ medoids, $k$ clusters are constructed by assigning each observation to the nearest one. The goal is to find these $k$ representative objects which minimize the sum of the dissimilarities of the observations to their closest representative object. In other words, the final goal is to obtain a set of clusters where the average distances of objects belonging to the cluster and the cluster representative is minimized (equivalently the sum of the distances can be minimized) \cite{Kaufman}.\newline
+The algorithm has two phases \cite{Gliozzo2}:
+\begin{itemize}
+\item \textbf{build phase}: initially, the algorithm randomly selects $k$ data points from the dataset as the initial medoids. The first object selected is the one that has minimal distance with all the other objects, thus the most central data point.
+The other points are individually evaluated to be selected as representatives and chosen if they have a high number of unselected objects that are closer to them than to already selected representatives. These steps are performed until a number of selected medoids $k$ is reached. Each data point is, then, assigned to the medoid chosen as the closest representative based on a distance metric. The cost of the current clustering solution is calculated as the sum of distances between each data point and its assigned medoid;
+\item \textbf{swap phase}: for each medoid and for each non-medoid data point assigned to it, the algorithm evaluates the potential improvement in the cost if the medoid and non-medoid are swapped. If a swap results in a lower cost, the medoid and non-medoid are swapped, and the cost of the clustering solution is updated accordingly. The swap phase iteratively explores all possible medoid swaps until a predefined stopping criterion is met, such as a maximum number of iterations or a negligible improvement in the cost.
+\end{itemize}
+
+\subsubsection{Spectral Clustering}
+Spectral Clustering is the other approach we employed. It is a technique with roots in graph theory used for clustering data points based on the spectral properties of a similarity matrix derived from the data and is particularly useful for identifying non-linear and complex structures within the data \cite{Luxburg}. Spectral properties are characteristics or information extracted from the eigenvalues and eigenvectors of a matrix. This approach leverages the concept of spectral decomposition to transform the data into a lower-dimensional space where the clusters can be more easily identified \cite{Luxburg}. The Spectral Clustering algorithm allows for detecting clusters that may have complex shapes or are not linearly separable in the original feature space \cite{Luxburg}. In this project, Spectral Clustering is performed with the support of the \textit{SNFtool} library, using $k = 3$ as number of clusters.
+
+\section{Statistical Analysis}\label{sec:Statistical}
+When comparing clusterings of multi-omic data, it is important to consider the specific characteristics and requirements of the data. To evaluate the efficacy of our techniques in identifying disease subtypes from the provided multi-omic samples we used the following indices:
+\begin{itemize}
+
+\item \textbf{Rand Index}: (\textbf{RI}): the RI is a statistical measure used in data clustering to evaluate the similarity between two clusterings of data. The range of this index spans from $0$ to $1$, where $0$ means that there is no agreement between the two data clusterings on any pair of data points and $1$ means perfect agreement, that is, the data clusterings are identical. This measure counts how many pairs of objects are in the same clusters in both C$_1$ and C$_2$ (depicted by $n_{11}$), and how many pairs are in different clusters in both C$_1$ and C$_2$ (depicted by $n_{00}$), considering all the possible pairings \cite{Gliozzo1, Wagner}. The Rand Index R is calculated as:
+
+$$R(C_1, C_2) = \frac{2(n_{00} + n_{11})}{n (n -1)} = \frac{n_{00} + n_{11}}{n_{00} + n_{10} + n_{01} + n_{11}}$$
+
+\item \textbf{Adjusted Rand Index} (\textbf{ARI}): the ARI is a modified version of the Rand Index widely used measure for comparing clusterings in various domains, including multi-omic data analysis. It accounts for chance agreements and provides a normalized similarity score. While the Rand Index is limited to values between $0$ and $1$, the Adjusted Rand index can generate negative values (ranging from $-1$ to $1$) if the index falls below the expected value \cite{Wagner};
+
+\item \textbf{Variation of Information} (\textbf{VI}): this measure is commonly used in multi-omic data analysis as it considers the shared information and entropy (informally, the entropy of a clustering $C$ is a measure for the uncertainty about the cluster of a randomly picked element) between two clusterings. It is a measure of the distance between two clusterings and it quantifies the information loss when one clustering is used to represent another, providing insights into the similarity or dissimilarity between the clusterings \cite{Wagner}. The VI index's range goes from $0$ to the maximum value determined by the logarithm of the number of elements being clustered;
+
+\item \textbf{Normalized Mutual Information} (\textbf{NMI}): NMI is another commonly employed measure in multi-omic data analysis. The mutual information index provides a means of quantifying the extent to which we can decrease uncertainty about an element’s cluster when we possess knowledge about its cluster in another clustering:
+
+$$MI(C_1, C_2) = \sum_{i = 1}^{k} \sum_{j = 1}^{l} P(i, j) \log_2{\frac{P(i, j)}{P(i)P(j)}}$$
+
+where $P(i, j) = \frac{\vert C_{1i} \cap C_{2j} \vert}{n}$ is the probability that an element belongs to cluster $C_i \in C_1$ and cluster $C_j \in Cluster_2$. Since mutual information has no upper bound, a normalized version is easier to interpret:
+
+$$NMI(C_1, C_2) = \frac{MI(C_1, C_2)}{\sqrt{H(C_1)H(C_2}}$$
+
+where $H(C_1)$ and $H(C_2)$ are the entropies associated with clustering $C_1$ and $C_2$. NMI values can span from $0$ to $1$, with the highest value of NMI achieved when $C_1$ is the same as $C_2$. he NMI provides a normalized measure that accounts for the inherent differences in the sizes and entropies of the compared sets \cite{Wagner};
+
+\item \textbf{Fowlkes-Mallows Index}: the Fowlkes-Mallows Index measures the geometric mean of pairwise precision and recall. It can be applicable in comparing clusterings of multi-omic data when considering precision and recall aspects. A higher value for the Fowlkes–Mallows index indicates a greater similarity between the clusters and the benchmark classifications \cite{Wagner};
+
+\item \textbf{Jaccard Coefficient}: the Jaccard Coefficient is a simple measure that compares the similarity between two clusterings based on the presence or absence of samples in the same or different clusters. It is very similar to the Rand Index, however it disregards the pairs of elements that are in different clusters for both clusterings. It can be used as a quick similarity measure for multi-omic data clusterings \cite{Wagner}. In detail, it compares the intersection and union of the data points assigned to each cluster. It provides a value between $0$ and $1$, with $1$ indicating complete similarity and $0$ indicating no similarity. Although it’s easy to interpret, it is sensitive to small sample sizes.
+
+$$J(C_1, C_2) = \frac{\vert C_1 \cap C_2 \vert}{\vert C_1 \cup C_2 \vert} = \frac{n_{11}}{n_{10} + n_{01} + n_{11}}$$
+
+\end{itemize}
+
+\noindent Those metrics are already implemented in the \textit{mclustcomp} R package, which we used in our research.
+
+\section{Results and conclusions}\label{sec:Results}
+The process of experimentation involved crafting a set of experiments aimed at establishing connections between the methodologies devised for data integration and clustering, and the Research Questions (RQs) put forth in the \hyperref[sec:Syn]{Synopsis}.
+
+A series of experiments has been designed, encompassing six individual trials. The initial trio of experiments employed PAM clustering along with similarity matrices derived from distinct data sources (miRNA, mRNA, and proteins). These matrices were generated using the usual scaled exponential Euclidean distance. These experiments are denoted as \textbf{single omics experiments}, given that each clustering was executed on an independent data source, without implementing any data integration methods.
+
+The subsequent three experiments leveraged multi-omics data and are thus termed \textbf{multi-omics experiments}. These trials encompassed PAM clustering with the average data integration technique, PAM clustering in conjunction with SNF integration, and Spectral Clustering combined with SNF integration. This collection of experiments is deemed comprehensive enough to adequately address the proposed research questions.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Experiments} 			 		 & \textbf{Cluster \#1}		  & \textbf{Cluster \#2} & \textbf{Cluster \#3} \\ \hline
+\textbf{miRNA} 	 			 &   91      	&  94         &  63   	    \\ \hline
+\textbf{mRNA}	 			 &   76			&  71 		  & 101			\\ \hline
+\textbf{Proteins}            &	 45			& 120		  &  83			\\ \hline
+\textbf{Average integration} &   79			&  97		  &  72			\\ \hline
+\textbf{SNF integration}	 & 	 78			&  92		  &  78			\\ \hline
+\textbf{Spectral Clustering} &   83			&  84		  &  81			\\ \hline
+\textbf{iCluster}			 &  105			&  60		  &  83			\\ \hline
+
+\end{tabular}
+    \caption{Count of samples in clusters for each experiment}
+    \label{tab:2}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=10cm]{figures/Distribution.png}
+\caption {Distribution of the clusters in the computer clusterings}
+\label{fig:7}
+\end{figure}
+
+Table \hyperref[tab:2]{\RomanNumeralCaps{2}} provides an initial summary of the outcomes. The purpose of this table is to display the sample counts within each cluster, illustrate how samples are distributed across clusters in each experiment and validate the clustering process.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Experiments}		 & \textbf{ARI} 	& \textbf{FMI} & \textbf{Jaccard} 	& \textbf{NMI} 		& \textbf{RI} 		& \textbf{VI} 		\\ \hline
+\textbf{miRNA} 	 			 & 0.0270     		& 0.3614           & 0.2205   	  	& 0.0426			& 0.5611	   		& 2.9797		 	\\ \hline
+\textbf{mRNA}	 			 & 0.0621     		& 0.3839           & 0.2375   	  	& 0.0581			& 0.5772	   		& 2.9352		 	\\ \hline
+\textbf{Proteins}            & 0.0003     		& 0.3618           & 0.2206   	  	& 0.0144			& 0.5379	   		& 2.9871		 	\\ \hline
+\textbf{Average integration} & 0.0419     		& 0.3692           & 0.2263   	  	& 0.0704			& 0.5690	   		& 2.9024		 	\\ \hline
+\textbf{SNF integration}	 & \textbf{0.1795} 	& \textbf{0.4584}  & \textbf{0.2973} & \textbf{0.1567} 	& \textbf{0.6317} 	& \textbf{2.6388}	\\ \hline
+\textbf{Spectral Clustering} & 0.1191     		& 0.4176           & 0.2638   	  	& 0.1172			& 0.6051	   		& 2.7663		 	\\ \hline
+
+\end{tabular}
+    \caption{Summary of the experiments' result metrics}
+    \label{tab:3}
+\end{table}
+
+Table \hyperref[tab:3]{\RomanNumeralCaps{3}} summarizes the resulting metrics for each experiment. 
+From this table, it result evident that there is a degree of overlap in the clustering outcomes, albeit to a limited extent. In approaching our questions through table analysis, we are firstly interested in discovering if the multi-omics data outperform the usage of single omics-data \ref{first}. A discernible trend emerges as all metrics related to SNF Integration and Spectral Clustering outperform the corresponding metrics derived from single omics data. This suggests that a reasoned choice for the integration of the multi-omics data provides better results. However, this pattern doesn't extend to the average integration method, which surpasses the single-omics metrics for proteins and miRNA, but not for mRNA. Noteworthy is the fact that, excluding NMI and VI, the metrics associated with mRNA outperform those of the average integration technique. This might imply that mRNA holds greater clustering power concerning miRNA and proteins, or alternatively, that simplistic data integration methods lack efficacy if the information obtained from a single omic outweighs others in significance. Furthermore, if the biological samples are highly heterogeneous, it's possible that mRNA data captures certain subpopulations more accurately while integration methods might smooth over these differences. All these suppositions could potentially be confirmed by employing a weighted average, assigning a higher weight to mRNA omics.
+
+As the second point of our analysis, we focus on whether the similarity networks fusion integration method can outperform a simple average data integration \ref{second}. From table \hyperref[tab:3]{\RomanNumeralCaps{3}}, it is easily noticeable that the SNF integration outperforms the average integration in every possible metrics in both clustering approaches.
+
+Since we are also interested in comparing the PAM algorithm against the Spectral Clustering algorithm, both with SNF data integration \ref{third}, we can notice that it is equally clear from the table that the PAM clustering outperforms the Spectral clustering since all its metrics are higher (or lower, in the case of the Variation of Information), providing a better similarity with the \textit{iCluster} diseases subtypes.
+
+Our focus shifts now towards a comprehensive analysis of the obtained metrics to provide a response to the last question \ref{fourth}. As already mentioned, the data in the table indicates a degree of overlap in the clustering outcomes, although quite limited. Even though the RI stands out as the most positive metric at $0.6317$ suggesting that the clusters are more alike to the \textit{iCluster} ones than they are not, the other metrics make clear that the agreement is closer to a result purely by chance than to a perfect agreement. This is confirmed by the $0.1567$ NMI and $0.2973$ Jaccard similarity, which both indicate a small similarity value between the sets, and by the $2.6388$ returned by the VI index, which differs slightly from the ones returned by the same index for the other similarity matrices. This indicates that all the clusters obtained are quite dissimilar than the \textit{iCluster} one.
+These results were foreseeable because of the differences between the PAM algorithm and the \textit{iCluster} method. The former one is based on traditional clustering techniques while \textit{iCluster} incorporates ﬂexible modeling of the associations between different data types and the variance–covariance structure within data types in a single framework, while simultaneously reducing the dimensionality of the datasets \cite{Shen}.\newline
+Furthermore, it is possible that our straightforward data processing might not have adequately extracted pertinent information suitable for the clustering algorithms. As a result, pinpointing subtypes based on the derived features could be more intricate. It is, therefore, possible to retry the experiments mantaining a higher number of features.
+
+\begin{figure}[ht]
+\minipage{1\textwidth}
+  \includegraphics[width=\linewidth]{figures/iClustersAverage.png}
+  \caption{\textit{iCluster} Visualization and Average Integration Cluster Visualization}\label{fig:8}
+\endminipage
+\end{figure}
+\begin{figure}[!htb]
+\minipage{1\textwidth}
+  \includegraphics[width=\linewidth]{figures/SNFClustersSpectralClusters.png}
+  \caption{Similarity Network Fusion Integration Partitioning Around Medoids Cluster Visualization and Similarity Network Fusion Integration Spectral Cluster Visualization}\label{fig:9}
+\endminipage
+\end{figure}
+
+To better understand the results of our investigation method, we propose the visualization of the clusters regarding the integration techniques. To reduce the dimensionality of the dataset utilized, we apply the \textbf{Principal Component Analysis} (\textbf{PCA}) \cite{Bro, STHDA}. PCA is a statistical technique used for dimensionality reduction and data transformation in order to simplify complex data while retaining its important underlying patterns \cite{Bro}.
+Analizing the \textit{iCluster} plot \ref{fig:8} it is easily understandable that considering only the features with higher variance is not sufficient to permit the clusters' separation. The same pattern appears on the visualization of the other clusters \ref{fig:8} \ref{fig:9}, with the exception of the Spectral Cluster one \ref{fig:9}. In this figure, the clusters are significantly separate: this can be explained by the fact that it operates by transforming the data into a lower-dimensional space where the clusters become more distinguishable \cite{Luxburg}.
+
+Hence, it can be concluded that the outcomes demonstrated a heightened capability for clustering within the multi-omics data when integrated with SNF. Conversely, employing the simple integration approach may diminish the potential of a singular omics source. Moreover, the findings showed a preference for the PAM algorithm over Spectral Clustering. Consequently, the integration of SNF coupled with PAM clustering yielded a cluster more similar to the \textit{iCluster} ones in our study.
+
+\printbibliography
+
+\end{document}
